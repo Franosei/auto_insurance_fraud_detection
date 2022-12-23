@@ -9,6 +9,7 @@ output: html_document
 library(data.table)
 library(dplyr)
 library(tidyverse)
+library(lares)
 ```
 
 ```{r}
@@ -45,9 +46,40 @@ data_char <- data %>%
   apply(2, function(x) length(unique(x)))
 data_char
 ```
-Everything looks fine for each class in each column except that there is are columns having "?" as a class so we tried to filter all those class and rename it as "unknown". Those columns cannot be remove becuase it might indicate that the insurer 
+# Needed columns
+
+We can observed that columns like "policy_bind_date", "policy_number", "insured_zip", "incident_date", "incident_location". These columns doesnt not contain information that will help in our machine learning model. "incident_location" contains 1000 unique locations. We will now focus on the needed columns
+```{r}
+new_data <- data %>% 
+  subset(select = -c(policy_bind_date,policy_number,insured_zip,incident_date,incident_location))
+head(new_data,5)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Everything looks fine for each class in each column except that there is are columns having "?" as a class so we tried to filter all those class and rename it as "unknown". Those columns cannot be remove becuase it might indicate that the insurer that class is not yet decided. Is better to keep then as a class than treating them as missing data. This might also means that the policy holder refuses to anser those questions
 ```{r}
 data %>% 
   select_if(is.character) %>% 
   str()
 ```
+```{r}
+unknown <- table(data)
+sum(data == "Saab") 
+```
+```{r}
+length(which(data == "?"))
+```
+
