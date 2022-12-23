@@ -1,0 +1,53 @@
+---
+title: "auto_insurance"
+author: "Francis Osei"
+date: "2022-12-22"
+output: html_document
+---
+
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+data <- fread("https://raw.githubusercontent.com/Franosei/auto_insurance_fraud_detection/main/insurance_claims.csv")
+head(data,5)
+```
+# Data preprocessing
+## Checking for mising values
+Here we try to find all columns with mising values and count how many missing values each column has. We realised that the colunm `_c39` has 1000 column so we drop that column
+```{r}
+#checking for columns with NA
+Na_column <- names(which(sapply(data, anyNA)))
+count_c39 <- sum(is.na(data$`_c39`))
+data = subset(data, select = -c(`_c39`) )
+head(data,5)
+```
+# Splitting policy_csl column
+
+Splitting policy_csl column such that each row contains a single data. policy_csl value X/Y means X = Bodily Injury Coverage — \$X,000 for injuries per person. Y = Overall Maximum Coverage — \$Y,000 for injuries total per accident. In this case we split this column policy_csl_X and policy_csl_Y.
+```{r}
+data <- data %>% 
+  separate(policy_csl, c('policy_csl_Bodily_Injury_Coverage','policy_csl_Overall_Maximum_Coverage'), extra='drop')
+head(data,5)
+```
+## Unique element for each column
+
+Categorical values with interger data types are easy to deal with and easy to undersatnd. From our dataset we can observe that those are the number of times an event occurs, year, age or amount. 
+We focus on the the unique element for object character. This will give us the idea whether to do one_hot_encoding or label_encoding. Both methods has their own advantages and disadvantages. We can observe that the column "incident_location" is different for all policy holders so we can drop that column. 
+We then tried to see some of the unique value for some columns.
+
+```{r}
+data_char <- data %>% 
+  select_if(is.character) %>% 
+  apply(2, function(x) length(unique(x)))
+data_char
+```
+Everything looks fine for each class in each column except that there is are columns having "?" as a class so we tried to filter all those class and rename it as "unknown". Those columns cannot be remove becuase it might indicate that the insurer 
+```{r}
+data %>% 
+  select_if(is.character) %>% 
+  str()
+```
