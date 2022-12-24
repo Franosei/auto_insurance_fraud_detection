@@ -21,6 +21,7 @@ library(ROSE)
 library(randomForest)
 library(e1071)
 library(plotrix)
+library(naivebayes)
 ```
 
 ```{r}
@@ -178,7 +179,7 @@ data_cor
 # Machine Learning
 ##  Splitting dataset into training and testing data
  
-We will first split our dataset into training and test data. We will use 75\% of our data for training and 25\% for testing our machine learning model
+We will first split our dataset into training and test data. We will use 70\% of our data for training and 30\% for testing our machine learning model
 ```{r}
 set.seed(123)
 ind <- sample(2, nrow(final_df), replace = TRUE, prob = c(0.7, 0.3))
@@ -188,16 +189,46 @@ test <- final_df[ind==2,]
 
 
 ## Balancing the train dataset
-To avoid data leakage, we will we will balance the train dataset instead of balancing our whole dataset. Balancing a dataset makes our trained model easier because it helps prevent the model from becoming biased towards one class. Having a balanced dataset would generate higher accuracy models, higher balanced accuracy and balanced detection rate 
+To avoid data leakage, we will we will balance the train dataset instead of balancing our whole dataset. Balancing our training dataset helps prevent the model from becoming biased towards one class. Having a balanced dataset would generate higher accuracy models, higher balanced accuracy and balanced detection rate. c("24%","76%")
 
 ```{r}
-tag <- final_df %>% 
+tag <- train %>% 
   select(fraud_reported)
 tag[,'fraud_reported']<-factor(tag[,'fraud_reported'])
 sub_tag <- tag %>% group_by(fraud_reported) %>% 
-  mutate(count = n()/1000*100) %>% 
+  mutate(count = round(n()/nrow(train),2)*100) %>% 
   distinct() 
-pie3D(sub_tag$count,radius=1.5,labels = c("24.7%","75.3%"),explode = 0.1, col=c("orange", "darkred"))
-legendg(0.3,1.2,c("fraud","not fraud"),fill=c("orange", "darkred"))
+pie3D(sub_tag$count,radius=1.5,labels = c("24%","76%"),explode = 0.1, col=c("darkred","orange"))
+legendg(0.3,1.2,c("fraud","not fraud"),fill=c("darkred","orange"))
+```
+
+## Over Sampling
+Here we randomly select data points from the minority class (Fraud) and duplicate them to increase the number of data points.
+
+```{r}
+set.seed(111)
+train$fraud_reported <- as.factor(train$fraud_reported)
+train_balnce <- upSample(x = train[,-ncol(train)],y = train$fraud_reported)
+```
+
+
+```{r}
+tag <- train_balnce %>% 
+  select(fraud_reported)
+tag[,'fraud_reported']<-factor(tag[,'fraud_reported'])
+sub_tag <- tag %>% group_by(fraud_reported) %>% 
+  mutate(count = round(n()/nrow(train_balnce),2)*100) %>% 
+  distinct() 
+pie3D(sub_tag$count,radius=1.5,labels = c("50%","50%"),explode = 0.1, col=c("darkred","orange"))
+legendg(0.3,1.2,c("fraud","not fraud"),fill=c("darkred","orange"))
+```
+# Naive Bayes
+
+```{r}
+train_balnce <- scale( train_balnce,-c('fraud_reported'))
+model <- naive_bayes(fraud_reported ~ ., data = train_balnce, usekernel = T) 
+p1 <- predict(model, train_balnce)
+tab1 <- table(p1, train_balnce$fraud_reported)
+sum(diag(tab1)) / sum(tab1)
 ```
 
