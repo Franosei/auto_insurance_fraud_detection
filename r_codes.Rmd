@@ -273,8 +273,6 @@ roc_grad_bost <- roc(as.numeric(pred_grad_boost),as.numeric(testing$fraud_report
 roc_grad_bost
 ```
 
-## Essemble Learning
-
 ## xgboost
 
 ```{r}
