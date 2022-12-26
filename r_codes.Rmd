@@ -19,8 +19,13 @@ library(caret)
 library(ggplot2)
 library(ROSE)
 library(randomForest)
+library(pROC)
 library(e1071)
 library(plotrix)
+library(caTools)
+library(caretEnsemble)
+library(xgboost)
+library(mlbench)
 library(naivebayes)
 ```
 
@@ -29,7 +34,7 @@ data <- fread("https://raw.githubusercontent.com/Franosei/auto_insurance_fraud_d
 head(data,5)
 ```
 # Data preprocessing
-## Checking for mising values
+## Checking for mising values and scalling all numeric values
 Here we try to find all columns with mising values and count how many missing values each column has. We realised that the colunm `_c39` has 1000 column so we drop that column
 
 
@@ -37,7 +42,8 @@ Here we try to find all columns with mising values and count how many missing va
 #checking for columns with NA
 Na_column <- names(which(sapply(data, anyNA)))
 count_c39 <- sum(is.na(data$`_c39`))
-data = subset(data, select = -c(`_c39`) )
+data = subset(data, select = -c(`_c39`) ) #%>% 
+ # mutate(across(where(is.numeric), scale))
 head(data,5)
 ```
 
@@ -75,29 +81,32 @@ data_fac
 
 ```{r,fig.width = 13,fig.height = 7}
 data_fac %>% 
-  pivot_longer(cols = c(1:10), names_to = "variables") %>% 
+  pivot_longer(cols = c(1:9), names_to = "variables") %>% 
   ggplot(aes(y=value,fill = fraud_reported))+
   geom_bar()+
   scale_fill_manual(values=c("orange", "darkred"))+
   coord_flip()+
-  facet_wrap(~variables, scale = "free", ncol = 5)+
+  facet_wrap(~variables, scale = "free", ncol = 3)+
   theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))+
   theme(axis.title.x = element_blank())+
   theme(legend.position = "bottom")
 ```
+
 ```{r,fig.width = 13,fig.height = 7}
 data_fac %>% 
-  pivot_longer(cols = c(11:17), names_to = "variables") %>% 
+  pivot_longer(cols = c(10:17), names_to = "variables") %>% 
   ggplot(aes(y=value,fill = fraud_reported))+
   geom_bar()+
   scale_fill_manual(values=c("orange", "darkred"))+
   coord_flip()+
-  facet_wrap(~variables, scale = "free", ncol = 4)+
+  facet_wrap(~variables, scale = "free", ncol = 3)+
   theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))+
   theme(axis.title.x = element_blank())+
   theme(legend.position = "bottom")
 ```
+
 Everything looks fine for each class in each column except that there is are columns having "?" as a class so we tried to filter all those class and rename it as "unknown". Those columns cannot be remove becuase it might indicate that the insurer that class is not yet decided. Is better to keep then as a class than treating them as missing data. This might also means that the policy holder refuses to answer those questions. We will deal with this prolem when dealing with label encoding and the one-hot-encoding
+
 
 ## Distibution plot for non categorical features
 
@@ -159,6 +168,8 @@ new_data$fraud_reported <- as.integer(as.character(new_data$fraud_reported))
 levels(new_data$property_damage) <- c("Unknown","NO","YES")
 levels(new_data$collision_type) <- c("Unknown","Front Collision","Rear Collision","Side Collision")
 levels(new_data$police_report_available) <- c("Unknown","NO","YES")
+levels(new_data$auto_model)[levels(new_data$auto_model)=='3 Series'] <- 'Others'
+levels(new_data$auto_model)[levels(new_data$auto_model)=='RSX'] <- 'Others'
 dummy <- dummyVars(" ~ .", data=new_data)
 final_df <- data.frame(predict(dummy, newdata=new_data))
 ```
@@ -179,27 +190,36 @@ data_cor
 # Machine Learning
 ##  Splitting dataset into training and testing data
  
-We will first split our dataset into training and test data. We will use 70\% of our data for training and 30\% for testing our machine learning model
+We will first split our dataset into training and test data. We will use 70\% of our data for training and 30\% for testing our machine learning model. Before splitting our dataset to training and testing, we will drop all correlated variables (cor value >= 0.90)
+
 ```{r}
-set.seed(123)
-ind <- sample(2, nrow(final_df), replace = TRUE, prob = c(0.7, 0.3))
-train <- final_df[ind==1,]
-test <- final_df[ind==2,]
+final_df <- final_df %>% 
+  select(-c(vehicle_claim,number_of_vehicles_involved,months_as_customer))
 ```
 
+
+```{r}
+set.seed(1234)
+indxTrain <- createDataPartition(y = final_df$fraud_reported,p = 0.70,list = FALSE)
+training <- final_df[indxTrain,]
+testing <- final_df[-indxTrain,]
+testing$fraud_reported <- as.factor(testing$fraud_reported)
+```
 
 ## Balancing the train dataset
 To avoid data leakage, we will we will balance the train dataset instead of balancing our whole dataset. Balancing our training dataset helps prevent the model from becoming biased towards one class. Having a balanced dataset would generate higher accuracy models, higher balanced accuracy and balanced detection rate. c("24%","76%")
 
+
 ```{r}
-tag <- train %>% 
+tag <- training %>% 
   select(fraud_reported)
 tag[,'fraud_reported']<-factor(tag[,'fraud_reported'])
 sub_tag <- tag %>% group_by(fraud_reported) %>% 
-  mutate(count = round(n()/nrow(train),2)*100) %>% 
+  mutate(count = round(n()/nrow(training),2)*100) %>% 
   distinct() 
 pie3D(sub_tag$count,radius=1.5,labels = c("24%","76%"),explode = 0.1, col=c("darkred","orange"))
 legendg(0.3,1.2,c("fraud","not fraud"),fill=c("darkred","orange"))
+
 ```
 
 ## Over Sampling
@@ -207,10 +227,10 @@ Here we randomly select data points from the minority class (Fraud) and duplicat
 
 ```{r}
 set.seed(111)
-train$fraud_reported <- as.factor(train$fraud_reported)
-train_balnce <- upSample(x = train[,-ncol(train)],y = train$fraud_reported)
+training$fraud_reported <- as.factor(training$fraud_reported)
+train_balnce <- upSample(x = training[,-ncol(training)],y = training$fraud_reported)
+train_balnce <- select(train_balnce,-c("Class"))
 ```
-
 
 ```{r}
 tag <- train_balnce %>% 
@@ -222,13 +242,57 @@ sub_tag <- tag %>% group_by(fraud_reported) %>%
 pie3D(sub_tag$count,radius=1.5,labels = c("50%","50%"),explode = 0.1, col=c("darkred","orange"))
 legendg(0.3,1.2,c("fraud","not fraud"),fill=c("darkred","orange"))
 ```
-# Naive Bayes
+```{r}
+levels(train_balnce$fraud_reported) <- c("not_fraud", "fraud")
+levels(testing$fraud_reported) <- c("not_fraud", "fraud")
+control = trainControl(method="repeatedcv", number=5, repeats=3,classProbs = T)
+```
+
+
+## Random Forest
 
 ```{r}
-train_balnce <- scale( train_balnce,-c('fraud_reported'))
-model <- naive_bayes(fraud_reported ~ ., data = train_balnce, usekernel = T) 
-p1 <- predict(model, train_balnce)
-tab1 <- table(p1, train_balnce$fraud_reported)
-sum(diag(tab1)) / sum(tab1)
+rand_forest <- train(fraud_reported~., data=train_balnce,'rf',trControl=control)
+pred_random <- predict(rand_forest,testing,type = "raw")
+confusionMatrix(table(pred_random,testing$fraud_reported),mode = "everything",positive = "fraud")
+```
+
+```{r}
+roc_rand <- roc(as.numeric(pred_random),as.numeric(testing$fraud_reported))
+roc_rand
+```
+# Stochastic Gradient Boosting
+
+```{r}
+grad_boost <- train(fraud_reported~., data=train_balnce,'gbm',trControl=control,verbose=FALSE)
+pred_grad_boost <- predict(grad_boost,testing,type = "raw")
+confusionMatrix(table(pred_grad_boost,testing$fraud_reported),mode = "everything",positive = "fraud")
+```
+```{r}
+roc_grad_bost <- roc(as.numeric(pred_grad_boost),as.numeric(testing$fraud_reported))
+roc_grad_bost
+```
+
+## Essemble Learning
+
+## xgboost
+
+```{r}
+tune_grid <- expand.grid(nrounds = 20,
+                        max_depth = 5,
+                        eta = 0.05,
+                        gamma = 0.01,
+                        colsample_bytree = 0.75,
+                        min_child_weight = 0,
+                        subsample = 0.5)
+xg_boost <- train(fraud_reported~., data=train_balnce,'xgbTree',trControl=control,tuneGrid = tune_grid,
+                tuneLength = 10)
+pred_xg_boost <- predict(xg_boost,testing,type = "raw")
+#xtable(table(pred_random,training$diagnosis))
+confusionMatrix(table(pred_xg_boost,testing$fraud_reported),mode = "everything",positive = "fraud")
+```
+```{r}
+roc_xg_bost <- roc(as.numeric(pred_xg_boost),as.numeric(testing$fraud_reported))
+roc_grad_bost
 ```
 
