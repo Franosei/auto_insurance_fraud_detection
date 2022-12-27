@@ -79,22 +79,27 @@ data_fac <- new_data %>%
 data_fac
 ```
 
-```{r,fig.width = 13,fig.height = 7}
+```{r,fig.width = 10,fig.height = 6}
 data_fac %>% 
-  pivot_longer(cols = c(1:9), names_to = "variables") %>% 
+  pivot_longer(cols = c(1:12), names_to = "variables") %>% 
   ggplot(aes(y=value,fill = fraud_reported))+
   geom_bar()+
-  scale_fill_manual(values=c("orange", "darkred"))+
+  scale_fill_manual(values=c("orange", "darkred"),labels=c('No', 'Yes'))+
   coord_flip()+
-  facet_wrap(~variables, scale = "free", ncol = 3)+
+  facet_wrap(~variables, scale = "free", ncol = 4)+
   theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))+
   theme(axis.title.x = element_blank())+
   theme(legend.position = "bottom")
 ```
 
+```{r}
+levels(data_fac$insured_education_level)
+```
+
+
 ```{r,fig.width = 13,fig.height = 7}
 data_fac %>% 
-  pivot_longer(cols = c(10:17), names_to = "variables") %>% 
+  pivot_longer(cols = c(12:18), names_to = "variables") %>% 
   ggplot(aes(y=value,fill = fraud_reported))+
   geom_bar()+
   scale_fill_manual(values=c("orange", "darkred"))+
@@ -125,29 +130,17 @@ Now we can plot the distribution of the non categorical variables
 non_cat <- select(new_data, -c(colnames(data_fac)))
 non_cat$fraud_reported <- data_fac$fraud_reported
 non_cat %>% 
-  pivot_longer(cols = c(1:8), names_to = "variables") %>% 
+  pivot_longer(cols = c(1:16), names_to = "variables") %>% 
   ggplot(aes(y=value,fill = fraud_reported))+
   geom_histogram()+
-  scale_fill_manual(values=c("orange", "darkred"))+
+  scale_fill_manual(values=c("orange", "darkred"),labels=c('No', 'Yes'))+
   coord_flip()+
   facet_wrap(~variables, scale = "free", ncol =4)+
   theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))+
   theme(axis.title.x = element_blank())+
-  theme(legend.position = "none")
+  theme(legend.position = "bottom")
 ```
 
-```{r,fig.width = 13,fig.height = 7}
-non_cat %>% 
-  pivot_longer(cols = c(9:16), names_to = "variables") %>% 
-  ggplot(aes(y=value,fill = fraud_reported))+
-  geom_histogram()+
-  scale_fill_manual(values=c("orange", "darkred"))+
-  coord_flip()+
-  facet_wrap(~variables, scale = "free", ncol =4)+
-  theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))+
-  theme(axis.title.x = element_blank())+
-  theme(legend.position = "none")
-```
 Now before we proced futhure to build our machine learning model, we will like to perform one-hot-encoding and label encoding to our categorical fetures.
 
 ## label encoding
@@ -179,7 +172,7 @@ final_df <- data.frame(predict(dummy, newdata=new_data))
 ```{r,r,fig.width = 13,fig.height = 7}
 corr_cross(final_df,
   max_pvalue = 0.05,
-  top = 20
+  top = 5
 )
 ```
 
@@ -248,7 +241,6 @@ levels(testing$fraud_reported) <- c("not_fraud", "fraud")
 control = trainControl(method="repeatedcv", number=5, repeats=3,classProbs = T)
 ```
 
-
 ## Random Forest
 
 ```{r}
@@ -261,6 +253,11 @@ confusionMatrix(table(pred_random,testing$fraud_reported),mode = "everything",po
 roc_rand <- roc(as.numeric(pred_random),as.numeric(testing$fraud_reported))
 roc_rand
 ```
+```{r}
+impt_boost <- varImp(rand_forest,scale=FALSE)
+plot(impt_boost, top = 10,col = "darkred")
+```
+
 # Stochastic Gradient Boosting
 
 ```{r}
@@ -294,3 +291,8 @@ roc_xg_bost <- roc(as.numeric(pred_xg_boost),as.numeric(testing$fraud_reported))
 roc_grad_bost
 ```
 
+```{r}
+impt <- varImp(xg_boost,scale=FALSE)
+plot(impt, top = 10,col = "darkred")
+
+```
