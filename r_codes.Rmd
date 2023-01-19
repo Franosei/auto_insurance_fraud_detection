@@ -6,8 +6,6 @@ output: html_document
 ---
 
 ```{r}
-#remotes::install_github("coolbutuseless/threed")
-#remotes::install_github("coolbutuseless/ggthreed")
 library(threed)
 library(ggthreed)
 library(data.table)
